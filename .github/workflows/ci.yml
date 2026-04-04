@@ -19,18 +19,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      # Сначала включаем corepack ДО setup-node, чтобы yarn был доступен
+      # Включаем corepack ДО setup-node, чтобы yarn был доступен
       - run: corepack enable
       - run: corepack prepare yarn@4.10.3 --activate
       
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          # Убираем cache: 'yarn' — corepack управляет версией, кэшируем через npm или по lockfile
           cache: 'npm'
           cache-dependency-path: yarn.lock
       
-      - run: corepack yarn install --frozen-lockfile
+      # Используем --immutable вместо устаревшего --frozen-lockfile
+      - run: corepack yarn install --immutable
       
       - uses: dtolnay/rust-toolchain@stable
         with:
