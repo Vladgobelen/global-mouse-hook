@@ -1,0 +1,15 @@
+name: Build Windows
+on: [push]
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with: { node-version: '18' }
+      - run: npm install
+      - run: npx napi build --platform --release
+      - uses: actions/upload-artifact@v3
+        with:
+          name: windows-build
+          path: global-mouse-hook.win32-x64-msvc.node

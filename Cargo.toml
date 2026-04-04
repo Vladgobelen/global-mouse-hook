@@ -1,0 +1,24 @@
+[package]
+name = "global-mouse-hook"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "2", features = ["napi4"] }
+napi-derive = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.52", features = [
+  "Win32_Foundation",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
+[target.x86_64-pc-windows-gnu.dependencies]
+napi = { version = "2", features = ["napi4"] }
+windows = { version = "0.52", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_UI_Input_KeyboardAndMouse"] }
+
+[build-dependencies]
+napi-build = "2"

@@ -1,0 +1,41 @@
+# === ЗАВИСИМОСТИ ===
+node_modules/
+
+# === RUST / CARGO ===
+target/
+*.rs.bk
+**/*.dll
+**/*.so
+**/*.dylib
+
+# === НАТИВНЫЕ МОДУЛИ (NAPI-RS) ===
+# Бинарники собираются на CI/локально через npx napi build
+*.node
+
+# === OUTPUT & ELECTRON BUILDER ===
+dist/
+out/
+release/
+*.asar
+
+# === IDE & EDITORS ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# === LOGS & ENV ===
+*.log
+*.tmp
+.env
+.env.local
+
+# === ТЕСТЫ / БЕНЧМАРКИ ===
+coverage/
+benchmark/
+
+# === LOCK FILES (выберите один, который реально используете) ===
+# package-lock.json
