@@ -1,7 +1,6 @@
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
-use std::ptr;
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -42,16 +41,15 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
 #[napi]
 pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Result<()> {
     if RUNNING.load(Ordering::SeqCst) {
-        return Err(Error::new(napi::Status::GenericFailure, "Hook is already running"));
+        return Err(Error::new(Status::GenericFailure, "Hook is already running".to_owned()));
     }
-
+    
     *CALLBACK.lock().unwrap() = Some(callback);
     RUNNING.store(true, Ordering::SeqCst);
 
     std::thread::spawn(|| {
-        // Устанавливаем хук — функция возвращает Result<HHOOK, Error>
-        let hook_result = unsafe { 
-            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0) 
+        let hook_result = unsafe {
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0)
         };
 
         let hook = match hook_result {
@@ -65,7 +63,6 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
 
         *HOOK.lock().unwrap() = Some(hook);
 
-        // Message loop (обязателен для WH_KEYBOARD_LL)
         let mut msg = MSG::default();
         while RUNNING.load(Ordering::SeqCst) {
             let has_msg = unsafe { PeekMessageW(&mut msg, HWND(0), 0, 0, PM_REMOVE) };
@@ -79,7 +76,6 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
             }
         }
 
-        // Снимаем хук
         if let Some(h) = HOOK.lock().unwrap().take() {
             unsafe { let _ = UnhookWindowsHookEx(h); }
         }

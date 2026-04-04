@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_NET_RETRY: 10
+  RUST_BACKTRACE: short
+  RUSTUP_MAX_RETRIES: 10
+
+jobs:
+  build:
+    name: Build on Windows
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        target: [x86_64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'yarn'
+          
+      - run: corepack enable
+      - run: yarn install --frozen-lockfile
+      
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - run: napi build --platform --release
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: napi-artifacts-${{ matrix.target }}
+          path: |
+            *.node
+            index.js
+            index.d.ts
