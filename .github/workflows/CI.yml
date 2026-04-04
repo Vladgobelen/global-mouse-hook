@@ -4,7 +4,9 @@ env:
   DEBUG: napi:*
   APP_NAME: global-mouse-hook
   CARGO_INCREMENTAL: '1'
-  COREPACK_ENABLE_STRICT: '0'  # Отключает блокировку Yarn 1.x при виде packageManager
+  COREPACK_ENABLE_STRICT: '0'
+  COREPACK_ENABLE_PROJECT_SPEC: '0'
+  YARN_IGNORE_PATH: '1'
 
 on:
   push:
@@ -32,10 +34,10 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: ''  # Важно: отключает внутреннюю проверку Yarn до активации Corepack
+          cache: ''
 
       - name: Enable Corepack & Yarn 4
         run: |
@@ -76,7 +78,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: ''
@@ -130,7 +132,7 @@ jobs:
       - uses: actions/checkout@v5
 
       - name: Setup Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
           cache: ''
