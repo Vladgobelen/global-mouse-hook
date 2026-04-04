@@ -18,14 +18,18 @@ jobs:
         target: [x86_64-pc-windows-msvc]
     steps:
       - uses: actions/checkout@v4
+      
+      # Сначала включаем corepack ДО setup-node, чтобы yarn был доступен
+      - run: corepack enable
+      - run: corepack prepare yarn@4.10.3 --activate
+      
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'yarn'
+          # Убираем cache: 'yarn' — corepack управляет версией, кэшируем через npm или по lockfile
+          cache: 'npm'
+          cache-dependency-path: yarn.lock
       
-      # Включаем corepack и используем его для вызова yarn
-      - run: corepack enable
-      - run: corepack prepare yarn@4.10.3 --activate
       - run: corepack yarn install --frozen-lockfile
       
       - uses: dtolnay/rust-toolchain@stable
