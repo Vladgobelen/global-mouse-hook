@@ -1,9 +1,12 @@
 name: CI
+
 env:
   DEBUG: napi:*
   APP_NAME: global-mouse-hook
   CARGO_INCREMENTAL: '1'
-'on':
+  COREPACK_ENABLE_STRICT: '0'  # Отключает блокировку Yarn 1.x при виде packageManager
+
+on:
   push:
     branches:
       - main
@@ -12,36 +15,57 @@ env:
     paths-ignore:
       - '**/*.md'
       - LICENSE
-      - '**/*.gitignore'
+      - '**/.gitignore'
       - .editorconfig
       - docs/**
   pull_request: null
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   lint:
     name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Setup node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: yarn
-      - name: Enable Corepack
-        run: corepack enable
+          cache: ''  # Важно: отключает внутреннюю проверку Yarn до активации Corepack
+
+      - name: Enable Corepack & Yarn 4
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .yarn/install-state.gz
+            node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
+
       - name: Install dependencies
         run: yarn install
+
       - name: Oxlint
         run: yarn lint
+
       - name: Cargo fmt
         run: cargo fmt -- --check
+
       - name: Clippy
         run: cargo clippy
 
@@ -50,22 +74,40 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Setup node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: yarn
-      - name: Enable Corepack
-        run: corepack enable
+          cache: ''
+
+      - name: Enable Corepack & Yarn 4
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .yarn/install-state.gz
+            node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           targets: x86_64-pc-windows-msvc
+
       - name: Install dependencies
         run: yarn install
+
       - name: Build
         run: yarn build
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -86,22 +128,40 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Setup node
+
+      - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
-          cache: yarn
-      - name: Enable Corepack
-        run: corepack enable
+          cache: ''
+
+      - name: Enable Corepack & Yarn 4
+        run: |
+          corepack enable
+          corepack prepare yarn@4.10.3 --activate
+
+      - name: Cache Yarn dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            .yarn/install-state.gz
+            node_modules
+          key: ${{ runner.os }}-yarn-${{ hashFiles('yarn.lock', 'package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
       - name: Install dependencies
         run: yarn install
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: bindings-win32-x64-msvc
           path: .
+
       - name: List packages
         run: ls -R .
         shell: bash
+
       - name: Test bindings
         run: yarn test
