@@ -1,14 +1,36 @@
-build-win:
-  runs-on: windows-latest
-  steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-    - run: npm install
-    - run: npx napi build --platform --release
-    - uses: actions/upload-artifact@v4  # ← Обновленная версия
-      with:
-        name: global-mouse-hook-win32-x64
-        path: global-mouse-hook.win32-x64-msvc.node
-        retention-days: 7  # Опционально: хранить артефакт 7 дней
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-win:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows binary
+        run: npx napi build --platform --release
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-mouse-hook-win32-x64-msvc
+          path: global-mouse-hook.win32-x64-msvc.node
+          retention-days: 7
