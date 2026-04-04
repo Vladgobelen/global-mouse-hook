@@ -27,14 +27,16 @@ jobs:
           node-version: 20
           cache: 'yarn'
           
+      # Включаем corepack и используем его для вызова yarn
       - run: corepack enable
+      - run: corepack prepare yarn@4.10.3 --activate
       - run: yarn install --frozen-lockfile
       
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
           
-      - run: napi build --platform --release
+      - run: yarn napi build --platform --release
       
       - uses: actions/upload-artifact@v4
         with:
