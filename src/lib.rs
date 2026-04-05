@@ -37,8 +37,8 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
         if let Ok(guard) = CALLBACK.lock() {
             if let Some(cb) = guard.as_ref() {
                 eprintln!("[RUST_HOOK] Calling JS callback with: '{}'", msg);
-                // 🔧 Ключевое исправление: передаём строку напрямую, napi сам конвертирует
-                let status = cb.call(msg, ThreadsafeFunctionCallMode::NonBlocking);
+                // 🔧 ИСПРАВЛЕНИЕ: оборачиваем msg в Ok()
+                let status = cb.call(Ok(msg), ThreadsafeFunctionCallMode::NonBlocking);
                 match status {
                     napi::Status::Ok => eprintln!("[RUST_HOOK] Callback call OK"),
                     e => eprintln!("[RUST_HOOK_ERR] Callback failed with status: {:?}", e),
