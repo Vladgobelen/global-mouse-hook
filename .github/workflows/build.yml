@@ -8,9 +8,6 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: ./global-mouse-hook
     steps:
       - uses: actions/checkout@v4
 
@@ -20,12 +17,15 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - name: Build Windows Binary
-        run: cargo build --release
+        run: |
+          # Безопасно переходим в папку модуля (используем bash, чтобы избежать проблем с путями в PowerShell)
+          cd global-mouse-hook
+          cargo build --release
+        shell: bash
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
           name: global-mouse-hook-win64
-          path: target/release/global-mouse-hook.exe
+          path: global-mouse-hook/target/release/global-mouse-hook.exe
           retention-days: 14
-
