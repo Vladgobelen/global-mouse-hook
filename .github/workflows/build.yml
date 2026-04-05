@@ -1,31 +1,53 @@
-name: Build Native Hook
+name: Build Windows Release
 
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 jobs:
   build-windows:
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Setup Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          targets: x86_64-pc-windows-msvc
+          node-version: 20
 
-      - name: Build Windows Binary
+      - name: Verify pre-compiled binary
         run: |
-          # Безопасно переходим в папку модуля (используем bash, чтобы избежать проблем с путями в PowerShell)
-          cd global-mouse-hook
-          cargo build --release
-        shell: bash
+          $binary = "global-mouse-hook.exe"
+          if (-not (Test-Path $binary)) {
+            Write-Error "❌ $binary not found in repository root! Commit the compiled binary first."
+            exit 1
+          }
+          Write-Host "✅ Found pre-compiled binary: $binary"
 
-      - name: Upload Windows Artifact
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Electron App (Windows Portable)
+        run: npm run build:win64
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifact
+        if: success() && !startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: global-mouse-hook-win64
-          path: global-mouse-hook/target/release/global-mouse-hook.exe
+          name: NSQCuE-Win64-Portable
+          path: dist/*.exe
           retention-days: 14
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
+          generate_release_notes: true
+          draft: false
