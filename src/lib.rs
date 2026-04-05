@@ -1,21 +1,24 @@
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
-use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use std::sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Mutex};
+use std::ptr;
+use std::ffi::c_void;
+use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM, HINSTANCE};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, DispatchMessageW, HHOOK, HINSTANCE, KBDLLHOOKSTRUCT, MSG,
+    CallNextHookEx, DispatchMessageW, HHOOK, KBDLLHOOKSTRUCT, MSG,
     PeekMessageW, PM_REMOVE, SetWindowsHookExW, TranslateMessage, UnhookWindowsHookEx,
     WH_KEYBOARD_LL, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 static CALLBACK: Mutex<Option<ThreadsafeFunction<String>>> = Mutex::new(None);
 static RUNNING: AtomicBool = AtomicBool::new(false);
-static HOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
+// Храним HHOOK как usize для атомарного доступа между потоками
+static HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
 
 extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     if n_code < 0 {
-        return unsafe { CallNextHookEx(HHOOK(0), n_code, w_param, l_param) };
+        return unsafe { CallNextHookEx(HHOOK(ptr::null_mut()), n_code, w_param, l_param) };
     }
 
     let kb = unsafe { &*(l_param.0 as *const KBDLLHOOKSTRUCT) };
@@ -45,9 +48,9 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
         }
     }
 
-    let hook_guard = HOOK.lock().unwrap();
-    if let Some(hook) = *hook_guard {
-        unsafe { CallNextHookEx(hook, n_code, w_param, l_param) }
+    let hook_ptr = HOOK_HANDLE.load(Ordering::Acquire) as *mut c_void;
+    if !hook_ptr.is_null() {
+        unsafe { CallNextHookEx(HHOOK(hook_ptr), n_code, w_param, l_param) }
     } else {
         LRESULT(0)
     }
@@ -70,7 +73,7 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
         eprintln!("[RUST_HOOK] Thread spawned, installing WH_KEYBOARD_LL...");
         
         let hook_result = unsafe {
-            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0)
+            SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(ptr::null_mut()), 0)
         };
 
         let hook = match hook_result {
@@ -85,11 +88,12 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
             }
         };
 
-        *HOOK.lock().unwrap() = Some(hook);
+        // Сохраняем хэндл хука как usize для атомарного доступа
+        HOOK_HANDLE.store(hook.0 as usize, Ordering::Release);
 
         let mut msg = MSG::default();
         while RUNNING.load(Ordering::SeqCst) {
-            let has_msg = unsafe { PeekMessageW(&mut msg, HWND(0), 0, 0, PM_REMOVE) };
+            let has_msg = unsafe { PeekMessageW(&mut msg, HWND(ptr::null_mut()), 0, 0, PM_REMOVE) };
             if has_msg.as_bool() {
                 unsafe {
                     TranslateMessage(&msg);
@@ -100,8 +104,10 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
             }
         }
 
-        if let Some(h) = HOOK.lock().unwrap().take() {
-            unsafe { let _ = UnhookWindowsHookEx(h); }
+        // Cleanup при остановке
+        let hook_ptr = HOOK_HANDLE.swap(0, Ordering::AcqRel) as *mut c_void;
+        if !hook_ptr.is_null() {
+            unsafe { let _ = UnhookWindowsHookEx(HHOOK(hook_ptr)); }
             eprintln!("[RUST_HOOK] Hook uninstalled");
         }
         *CALLBACK.lock().unwrap() = None;
