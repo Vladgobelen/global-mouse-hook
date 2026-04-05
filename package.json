@@ -6,6 +6,7 @@
   "scripts": {
     "build": "cargo build --release",
     "build:debug": "cargo build",
+    "build:win64": "cargo build --release",
     "format": "cargo fmt",
     "lint": "cargo clippy"
   },

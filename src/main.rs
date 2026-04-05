@@ -3,7 +3,6 @@ use std::io::{self, BufRead, Write};
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use std::thread;
 use std::time::Duration;
-
 #[cfg(windows)]
 use windows::Win32::System::Console::FreeConsole;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM, HINSTANCE};
@@ -21,12 +20,12 @@ struct KeyEvent {
 }
 
 fn send_event(event_type: &'static str, vk_code: u32) {
-    // 🔧 Формируем JSON вручную — надёжнее и быстрее
-    let json = format!(r#"{{"type":"{}","event":"{}","code":{}}}"#, 
-        event_type, 
-        if event_type == "key" { "down" } else { "up" },
-        vk_code
-    );
+    let event_name = if event_type == "key" { "down" } else { "up" };
+    let json = serde_json::json!({
+        "type": event_type,
+        "event": event_name,
+        "code": vk_code
+    });
     
     let stdout = io::stdout();
     let mut handle = stdout.lock();
@@ -39,16 +38,18 @@ static HOOK_HANDLE: Mutex<Option<HHOOK>> = Mutex::new(None);
 
 extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     if n_code < 0 {
-        // 🔧 В windows@0.52: HHOOK(0)
         return unsafe { CallNextHookEx(HHOOK(0), n_code, w_param, l_param) };
     }
 
     let kb = unsafe { &*(l_param.0 as *const KBDLLHOOKSTRUCT) };
     let vk = kb.vkCode;
-    
+
     match w_param.0 as u32 {
         code if code == WM_KEYDOWN || code == WM_SYSKEYDOWN => {
             send_event("key", vk);
+        }
+        code if code == WM_KEYUP || code == WM_SYSKEYUP => {
+            send_event("keyup", vk);
         }
         _ => {}
     }
@@ -64,7 +65,8 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
 fn install_hook() -> Result<HHOOK, String> {
     unsafe {
         SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0)
-    }.map_err(|e| format!("SetWindowsHookExW failed: {}", e))
+    }
+    .map_err(|e| format!("SetWindowsHookExW failed: {}", e))
 }
 
 fn message_loop() {
@@ -91,7 +93,6 @@ fn cleanup_hook() {
 }
 
 fn main() {
-    // 🔧 Скрываем консоль на Windows (опционально)
     #[cfg(windows)]
     unsafe { let _ = FreeConsole(); }
 
@@ -128,7 +129,7 @@ fn main() {
     message_loop();
     let _ = stdin_handle.join();
     cleanup_hook();
-    
+
     let _ = writeln!(io::stdout(), "{{\"type\":\"exit\",\"status\":\"clean\"}}");
     let _ = io::stdout().flush();
 }

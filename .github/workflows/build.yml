@@ -1,5 +1,4 @@
 name: Build Windows Release
-
 on:
   push:
     branches: [ "main", "master" ]
@@ -9,24 +8,35 @@ on:
 jobs:
   build-windows:
     runs-on: windows-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build Rust Binary
+        run: cargo build --release
+
+      - name: Verify binary
+        run: |
+          $binary = "target/release/global-mouse-hook.exe"
+          if (-not (Test-Path $binary)) {
+            Write-Error "❌ Failed to build global-mouse-hook.exe"
+            exit 1
+          }
+          Write-Host "✅ Successfully built: $binary"
+          
+          # Если Electron ожидает бинарник в корне проекта, раскомментируйте следующую строку:
+          # Copy-Item $binary -Destination "."
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-
-      - name: Verify pre-compiled binary
-        run: |
-          $binary = "global-mouse-hook.exe"
-          if (-not (Test-Path $binary)) {
-            Write-Error "❌ $binary not found in repository root! Commit the compiled binary first."
-            exit 1
-          }
-          Write-Host "✅ Found pre-compiled binary: $binary"
 
       - name: Install dependencies
         run: npm ci
