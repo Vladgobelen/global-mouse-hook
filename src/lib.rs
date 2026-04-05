@@ -1,9 +1,8 @@
 use napi::bindgen_prelude::*;
 use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
-use std::sync::{atomic::{AtomicBool, AtomicUsize, Ordering}, Mutex};
+use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 use std::ptr;
-use std::ffi::c_void;
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM, HINSTANCE};
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, HHOOK, KBDLLHOOKSTRUCT, MSG,
@@ -13,8 +12,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 static CALLBACK: Mutex<Option<ThreadsafeFunction<String>>> = Mutex::new(None);
 static RUNNING: AtomicBool = AtomicBool::new(false);
-// Храним HHOOK как usize для атомарного доступа между потоками
-static HOOK_HANDLE: AtomicUsize = AtomicUsize::new(0);
+static HOOK_HANDLE: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     if n_code < 0 {
@@ -38,8 +36,9 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
         
         if let Ok(guard) = CALLBACK.lock() {
             if let Some(cb) = guard.as_ref() {
-                eprintln!("[RUST_HOOK] Calling JS callback with: {}", msg);
-                let status = cb.call(Ok(msg.clone()), ThreadsafeFunctionCallMode::NonBlocking);
+                eprintln!("[RUST_HOOK] Calling JS callback with: '{}'", msg);
+                // 🔧 Ключевое исправление: передаём строку напрямую, napi сам конвертирует
+                let status = cb.call(msg, ThreadsafeFunctionCallMode::NonBlocking);
                 match status {
                     napi::Status::Ok => eprintln!("[RUST_HOOK] Callback call OK"),
                     e => eprintln!("[RUST_HOOK_ERR] Callback failed with status: {:?}", e),
@@ -48,7 +47,7 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
         }
     }
 
-    let hook_ptr = HOOK_HANDLE.load(Ordering::Acquire) as *mut c_void;
+    let hook_ptr = HOOK_HANDLE.load(Ordering::Acquire) as *mut std::ffi::c_void;
     if !hook_ptr.is_null() {
         unsafe { CallNextHookEx(HHOOK(hook_ptr), n_code, w_param, l_param) }
     } else {
@@ -88,7 +87,6 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
             }
         };
 
-        // Сохраняем хэндл хука как usize для атомарного доступа
         HOOK_HANDLE.store(hook.0 as usize, Ordering::Release);
 
         let mut msg = MSG::default();
@@ -104,8 +102,7 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
             }
         }
 
-        // Cleanup при остановке
-        let hook_ptr = HOOK_HANDLE.swap(0, Ordering::AcqRel) as *mut c_void;
+        let hook_ptr = HOOK_HANDLE.swap(0, Ordering::AcqRel) as *mut std::ffi::c_void;
         if !hook_ptr.is_null() {
             unsafe { let _ = UnhookWindowsHookEx(HHOOK(hook_ptr)); }
             eprintln!("[RUST_HOOK] Hook uninstalled");
