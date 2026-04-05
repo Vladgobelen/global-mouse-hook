@@ -39,7 +39,7 @@ static HOOK_HANDLE: Mutex<Option<HHOOK>> = Mutex::new(None);
 
 extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) -> LRESULT {
     if n_code < 0 {
-        // 🔧 В windows@0.52: HHOOK(0), а не HHOOK(ptr::null_mut())
+        // 🔧 В windows@0.52: HHOOK(0)
         return unsafe { CallNextHookEx(HHOOK(0), n_code, w_param, l_param) };
     }
 
@@ -50,7 +50,6 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
         code if code == WM_KEYDOWN || code == WM_SYSKEYDOWN => {
             send_event("key", vk);
         }
-        // WM_KEYUP можно добавить при необходимости
         _ => {}
     }
 
@@ -63,7 +62,6 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
 }
 
 fn install_hook() -> Result<HHOOK, String> {
-    // 🔧 HINSTANCE(0) для windows@0.52
     unsafe {
         SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0)
     }.map_err(|e| format!("SetWindowsHookExW failed: {}", e))
@@ -72,7 +70,6 @@ fn install_hook() -> Result<HHOOK, String> {
 fn message_loop() {
     let mut msg = MSG::default();
     while RUNNING.load(Ordering::SeqCst) {
-        // 🔧 HWND(0) для windows@0.52
         let has_msg = unsafe { PeekMessageW(&mut msg, HWND(0), 0, 0, PM_REMOVE) };
         if has_msg.as_bool() {
             unsafe {

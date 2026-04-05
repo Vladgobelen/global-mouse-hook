@@ -3,7 +3,7 @@ name = "global-mouse-hook"
 version = "0.1.0"
 edition = "2021"
 
-# 🔧 Собираем бинарь, а не библиотеку
+# 🔧 Собираем исполняемый файл, а не .node библиотеку
 [[bin]]
 name = "global-mouse-hook"
 path = "src/main.rs"
@@ -12,7 +12,7 @@ path = "src/main.rs"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# 🔧 windows@0.52 + нужные фичи
+# 🔧 Windows API только для Windows-таргетов
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.52", features = [
     "Win32_Foundation",

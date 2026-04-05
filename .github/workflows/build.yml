@@ -1,0 +1,56 @@
+name: Build Native Addon
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Build global-mouse-hook (Linux)
+        run: |
+          cd global-mouse-hook
+          cargo build --release
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-addon
+          path: global-mouse-hook/target/release/global-mouse-hook
+          retention-days: 7
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Build global-mouse-hook (Windows)
+        run: |
+          cd global-mouse-hook
+          cargo build --release
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-addon
+          path: global-mouse-hook/target/release/global-mouse-hook.exe
+          retention-days: 7
