@@ -68,9 +68,15 @@
     "typescript": "^5.9.2"
   },
   "lint-staged": {
-    "*.@(js|ts|tsx)": ["oxlint --fix"],
-    "*.@(js|ts|tsx|yml|yaml|md|json)": ["prettier --write"],
-    "*.toml": ["taplo format"]
+    "*.@(js|ts|tsx)": [
+      "oxlint --fix"
+    ],
+    "*.@(js|ts|tsx|yml|yaml|md|json)": [
+      "prettier --write"
+    ],
+    "*.toml": [
+      "taplo format"
+    ]
   },
   "ava": {
     "extensions": {
@@ -81,7 +87,10 @@
     "environmentVariables": {
       "OXC_TSCONFIG_PATH": "./test/tsconfig.json"
     },
-    "nodeArguments": ["--import", "@oxc-node/core/register"]
+    "nodeArguments": [
+      "--import",
+      "@oxc-node/core/register"
+    ]
   },
   "prettier": {
     "printWidth": 120,
