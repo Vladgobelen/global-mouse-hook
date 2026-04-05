@@ -6,7 +6,7 @@ use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 // Глобальные переменные
-static CALLBACK: Mutex<Option<ThreadsafeFunction<String>>> = Mutex::new(None);
+static CALLBACK: Mutex<Option<ThreadsafeFunction>> = Mutex::new(None);
 static RUNNING: AtomicBool = AtomicBool::new(false);
 static HOOK: Mutex<Option<HHOOK>> = Mutex::new(None);
 
@@ -16,16 +16,20 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
     }
 
     let kb = unsafe { &*(l_param.0 as *const KBDLLHOOKSTRUCT) };
-    let payload = match w_param.0 as u32 {
-        WM_KEYDOWN | WM_SYSKEYDOWN => Some(format!("down:{}", kb.vkCode)),
-        WM_KEYUP | WM_SYSKEYUP => Some(format!("up:{}", kb.vkCode)),
-        _ => None,
+    let msg_type = match w_param.0 as u32 {
+        WM_KEYDOWN | WM_SYSKEYDOWN => "down",
+        WM_KEYUP | WM_SYSKEYUP => "up",
+        _ => return unsafe { CallNextHookEx(HHOOK(0), n_code, w_param, l_param) },
     };
 
-    if let Some(msg) = payload {
-        if let Ok(guard) = CALLBACK.lock() {
-            if let Some(cb) = guard.as_ref() {
-                let _ = cb.call(Ok(msg), ThreadsafeFunctionCallMode::NonBlocking);
+    let payload = format!("{}:{}", msg_type, kb.vkCode);
+    eprintln!("[RUST_HOOK_RAW] Captured: {}", payload);
+
+    if let Ok(guard) = CALLBACK.lock() {
+        if let Some(cb) = guard.as_ref() {
+            let res = cb.call(Ok(payload.clone()), ThreadsafeFunctionCallMode::NonBlocking);
+            if let Err(e) = res {
+                eprintln!("[RUST_HOOK_ERR] Callback failed: {:?}", e);
             }
         }
     }
@@ -39,23 +43,27 @@ extern "system" fn keyboard_hook_proc(n_code: i32, w_param: WPARAM, l_param: LPA
 }
 
 #[napi]
-pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Result<()> {
+pub fn start_global_keyboard_hook(callback: ThreadsafeFunction) -> Result<()> {
+    eprintln!("[RUST_HOOK] init() called");
     if RUNNING.load(Ordering::SeqCst) {
         return Err(Error::new(Status::GenericFailure, "Hook is already running".to_owned()));
     }
-    
     *CALLBACK.lock().unwrap() = Some(callback);
     RUNNING.store(true, Ordering::SeqCst);
 
     std::thread::spawn(|| {
+        eprintln!("[RUST_HOOK] Thread spawned, installing WH_KEYBOARD_LL...");
         let hook_result = unsafe {
             SetWindowsHookExW(WH_KEYBOARD_LL, Some(keyboard_hook_proc), HINSTANCE(0), 0)
         };
 
         let hook = match hook_result {
-            Ok(h) => h,
+            Ok(h) => {
+                eprintln!("[RUST_HOOK] Hook installed OK (handle={:?})", h.0);
+                h
+            }
             Err(e) => {
-                eprintln!("[hook] Failed to set WH_KEYBOARD_LL: {}", e);
+                eprintln!("[RUST_HOOK] FAILED to install hook: {}", e);
                 RUNNING.store(false, Ordering::SeqCst);
                 return;
             }
@@ -72,22 +80,25 @@ pub fn start_global_keyboard_hook(callback: ThreadsafeFunction<String>) -> Resul
                     DispatchMessageW(&msg);
                 }
             } else {
-                std::thread::sleep(std::time::Duration::from_millis(5));
+                std::thread::sleep(std::time::Duration::from_millis(2));
             }
         }
 
         if let Some(h) = HOOK.lock().unwrap().take() {
             unsafe { let _ = UnhookWindowsHookEx(h); }
+            eprintln!("[RUST_HOOK] Hook uninstalled");
         }
         *CALLBACK.lock().unwrap() = None;
-        eprintln!("[hook] Keyboard hook thread exited cleanly");
+        eprintln!("[RUST_HOOK] Thread exited cleanly");
     });
 
+    eprintln!("[RUST_HOOK] init() returning Ok");
     Ok(())
 }
 
 #[napi]
 pub fn stop_global_keyboard_hook() -> Result<()> {
+    eprintln!("[RUST_HOOK] stop() called");
     if !RUNNING.load(Ordering::SeqCst) {
         return Ok(());
     }
